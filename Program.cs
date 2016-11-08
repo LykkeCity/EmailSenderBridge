@@ -33,9 +33,9 @@ namespace EmailSenderBridge
             services.AddLogging();
 
             IConfigurationRoot configuration = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                .Build();
+                    .SetBasePath(Directory.GetCurrentDirectory())
+                    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                    .Build();
 
             services.AddSingleton(configuration);
             services.AddOptions();

@@ -1,5 +1,7 @@
 ﻿using System;
+using System.IO;
 using System.Net;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Amqp;
@@ -27,22 +29,34 @@ namespace EmailSenderBridge
 
             string policyName = WebUtility.UrlEncode(_settings.ServiceBus.PolicyName);
             string key = WebUtility.UrlEncode(_settings.ServiceBus.Key);
-            string connnectionString = $"amqps://{policyName}:{key}@{_settings.ServiceBus.NamespaceUrl}/";
+            string connectionString = $"amqps://{policyName}:{key}@{_settings.ServiceBus.NamespaceUrl}/";
 
-            _connection = Connection.Factory.CreateAsync(new Address(connnectionString)).GetAwaiter().GetResult();
-            _session = new Session(_connection);
+            try
+            {
+                _connection = Connection.Factory.CreateAsync(new Address(connectionString)).GetAwaiter().GetResult();
+                _session = new Session(_connection);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Check ServiceBus settings in appsettings.json");
+                _logger.LogError(ex.ToString());
+            }
         }
 
         public async Task RunAsync()
         {
             try
             {
-                CancellationTokenSource cts = new CancellationTokenSource();
+                if (!IsSettingsValid())
+                {
+                    return;
+                }
 
-                Task.WaitAll(
-                    ReceiveMessagesAsync(cts.Token)
-                );
+                ReceiverLink receiver = new ReceiverLink(_session, "receiver-link", _settings.ServiceBus.QueueName);
+                receiver.Start(5, ReceiveMessage);
 
+                Console.WriteLine("Waiting for the messages...");
+                Console.ReadLine();
                 await _session.CloseAsync();
                 await _connection.CloseAsync();
             }
@@ -52,61 +66,135 @@ namespace EmailSenderBridge
             }
         }
 
-        private async Task ReceiveMessagesAsync(CancellationToken cancellationToken)
+        private void ReceiveMessage(ReceiverLink receiver, Message message)
         {
-            ReceiverLink receiver = new ReceiverLink(_session, "receiver-link", _settings.ServiceBus.QueueName);
-
-            while (!cancellationToken.IsCancellationRequested)
+            try
             {
-                Message message = await receiver.ReceiveAsync(1000);
+                _logger.LogInformation("Processing message...");
+                string email = message.ApplicationProperties["email"].ToString();
+                string sender = message.ApplicationProperties["sender"].ToString();
+                bool isHtml = Convert.ToBoolean(message.ApplicationProperties["isHtml"]);
+                string subject = message.ApplicationProperties["subject"].ToString();
+                bool hasAttachment = Convert.ToBoolean(message.ApplicationProperties["hasAttachment"]);
 
-                if (message != null)
+                string body = message.GetBody<string>();
+
+                var emailMessage = new MimeMessage();
+
+                emailMessage.From.Add(!string.IsNullOrEmpty(sender)
+                    ? new MailboxAddress(string.Empty, sender)
+                    : new MailboxAddress(_settings.Smtp.DisplayName, _settings.Smtp.From));
+
+                emailMessage.To.Add(new MailboxAddress(string.Empty, email));
+                emailMessage.Subject = subject;
+
+                var messageBody = new TextPart(isHtml ? TextFormat.Html : TextFormat.Plain) { Text = body };
+
+
+                if (hasAttachment)
                 {
-                    bool isHtml = Convert.ToBoolean(message.ApplicationProperties["IsHtml"]);
-                    string subject = message.ApplicationProperties["Subject"].ToString();
-                    string to = message.ApplicationProperties["To"].ToString();
+                    string contentType = message.ApplicationProperties["contentType"].ToString();
+                    string filename = message.ApplicationProperties["fileName"].ToString();
+                    byte[] file = (byte[])message.ApplicationProperties["file"];
 
-                    string body = message.GetBody<string>();
-
-                    var emailMessage = new MimeMessage();
-
-                    emailMessage.From.Add(new MailboxAddress(_settings.Smtp.DisplayName, _settings.Smtp.From));
-                    emailMessage.To.Add(new MailboxAddress(string.Empty, to));
-                    emailMessage.Subject = subject;
-
-                    var messageBody = new TextPart(isHtml ? TextFormat.Html : TextFormat.Plain) { Text = body };
-
-                    //TODO: implement adding attachments
-                    //var attachmentData = new MemoryStream(Encoding.UTF8.GetBytes("MyText"));
-                    //var attachment = new MimePart("text", "txt")
-                    //{
-                    //    ContentObject = new ContentObject(attachmentData),
-                    //    FileName = "mytext.txt"
-                    //};
-
-                    //var multipart = new Multipart("mixed");
-                    //multipart.Add(messageBody);
-                    //multipart.Add(attachment);
-
-                    //emailMessage.Body = multipart;
-
-                    emailMessage.Body = messageBody;
-
-                    using (var client = new SmtpClient())
+                    var attachmentData = new MemoryStream(file);
+                    var attachment = new MimePart(contentType)
                     {
-                        client.LocalDomain = _settings.Smtp.LocalDomain;
+                        ContentObject = new ContentObject(attachmentData),
+                        FileName = filename
+                    };
 
-                        await client.ConnectAsync(_settings.Smtp.Host, _settings.Smtp.Port, SecureSocketOptions.None, cancellationToken).ConfigureAwait(false);
-                        await client.AuthenticateAsync(_settings.Smtp.Login, _settings.Smtp.Password, cancellationToken).ConfigureAwait(false);
-                        await client.SendAsync(emailMessage, cancellationToken).ConfigureAwait(false);
-                        await client.DisconnectAsync(true, cancellationToken).ConfigureAwait(false);
-                    }
-
-                    receiver.Accept(message);
+                    Multipart multipart = new Multipart("mixed") { messageBody, attachment };
+                    emailMessage.Body = multipart;
                 }
+                else
+                {
+                    emailMessage.Body = messageBody;
+                }
+
+                using (var client = new SmtpClient())
+                {
+                    _logger.LogInformation($"Sending email to {email} from {(string.IsNullOrEmpty(sender) ? _settings.Smtp.From : sender)} with subject '{subject}'");
+                    client.LocalDomain = _settings.Smtp.LocalDomain;
+                    client.Connect(_settings.Smtp.Host, _settings.Smtp.Port, _settings.Smtp.UseSsl);
+                    client.Authenticate(_settings.Smtp.Login, _settings.Smtp.Password);
+                    client.Send(emailMessage);
+                    client.Disconnect(true);
+                }
+
+                receiver.Accept(message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex.ToString());
+            }
+        }
+
+        private bool IsSettingsValid()
+        {
+            bool isValid = true;
+
+            if (string.IsNullOrEmpty(_settings.ServiceBus.NamespaceUrl))
+            {
+                isValid = false;
+                Console.WriteLine("Provide NamespaceUrl value for ServiceBus in appsettings.json");
             }
 
-            await receiver.CloseAsync();
+            if (string.IsNullOrEmpty(_settings.ServiceBus.PolicyName))
+            {
+                isValid = false;
+                Console.WriteLine("Provide PolicyName value for ServiceBus in appsettings.json");
+            }
+
+            if (string.IsNullOrEmpty(_settings.ServiceBus.Key))
+            {
+                isValid = false;
+                Console.WriteLine("Provide Key value for ServiceBus in appsettings.json");
+            }
+
+            if (string.IsNullOrEmpty(_settings.ServiceBus.QueueName))
+            {
+                isValid = false;
+                Console.WriteLine("Provide QueueName value for ServiceBus in appsettings.json");
+            }
+
+            if (string.IsNullOrEmpty(_settings.Smtp.Host))
+            {
+                isValid = false;
+                Console.WriteLine("Provide Host value for Smtp in appsettings.json");
+            }
+
+            if (_settings.Smtp.Port == 0)
+            {
+                isValid = false;
+                Console.WriteLine("Provide Post value for Smtp in appsettings.json");
+            }
+
+            if (string.IsNullOrEmpty(_settings.Smtp.Login))
+            {
+                isValid = false;
+                Console.WriteLine("Provide Login value for Smtp in appsettings.json");
+            }
+
+            if (string.IsNullOrEmpty(_settings.Smtp.Password))
+            {
+                isValid = false;
+                Console.WriteLine("Provide Password value for Smtp in appsettings.json");
+            }
+
+            if (string.IsNullOrEmpty(_settings.Smtp.From))
+            {
+                isValid = false;
+                Console.WriteLine("Provide From value for Smtp in appsettings.json");
+            }
+
+            if (_settings.Smtp.UseSsl == null)
+            {
+                isValid = false;
+                Console.WriteLine("Provide UseSsl value for Smtp in appsettings.json");
+            }
+
+            return isValid;
         }
     }
 }

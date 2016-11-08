@@ -2,7 +2,7 @@
 {
     public class ApplicationSettings
     {
-        public ServiceBusSettings ServiceBus { get; set; }
-        public SmtpSettings Smtp { get; set; }
+        public ServiceBusSettings ServiceBus { get; set; } = new ServiceBusSettings();
+        public SmtpSettings Smtp { get; set; } = new SmtpSettings();
     }
 }

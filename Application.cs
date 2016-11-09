@@ -188,12 +188,6 @@ namespace EmailSenderBridge
                 Console.WriteLine("Provide From value for Smtp in appsettings.json");
             }
 
-            if (_settings.Smtp.UseSsl == null)
-            {
-                isValid = false;
-                Console.WriteLine("Provide UseSsl value for Smtp in appsettings.json");
-            }
-
             return isValid;
         }
     }

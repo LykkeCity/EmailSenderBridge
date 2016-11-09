@@ -35,5 +35,13 @@
       "imports": "dnxcore50"
     }
   },
-  "version": "1.0.0-*"
+  "version": "1.0.0-*",
+  "description": "Console application to listen azure service bus queue for messages (which are emails) and sends them (emails) using MimeKit",
+  "packOptions": {
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/LykkeCity/EmailSenderBridge"
+    }
+  },
+  "licenseUrl": "http://www.opensource.org/licenses/MIT"
 }

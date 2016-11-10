@@ -116,7 +116,7 @@ namespace EmailSenderBridge
                 {
                     _logger.LogInformation($"Sending email to {email} from {(string.IsNullOrEmpty(sender) ? _settings.Smtp.From : sender)} with subject '{subject}'");
                     client.LocalDomain = _settings.Smtp.LocalDomain;
-                    client.Connect(_settings.Smtp.Host, _settings.Smtp.Port, _settings.Smtp.UseSsl);
+                    client.Connect(_settings.Smtp.Host, _settings.Smtp.Port, SecureSocketOptions.None);
                     client.Authenticate(_settings.Smtp.Login, _settings.Smtp.Password);
                     client.Send(emailMessage);
                     client.Disconnect(true);

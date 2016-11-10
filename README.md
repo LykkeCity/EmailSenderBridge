@@ -15,7 +15,6 @@ Console application to listen azure service bus queue for messages (which are em
   *  Host - smtp server host name or ip address
   *  Port - smtp server Port
   *  Login/Password - credentials for smtp auth on selected server
-  *  UseSsl - true/false to use SSL or notification
   *  From - email address to be used as "from" field of the email messages
   *  DisplayName - display name of the email address to be used in "from" field of the email message
   *  LocalDomain - The local domain is used in the HELO or EHLO commands sent to the SMTP server. If left unset, the local IP address will be used instead.

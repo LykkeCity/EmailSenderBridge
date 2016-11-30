@@ -1,0 +1,25 @@
+version: '2'
+services:
+  emailsenderbroker:
+    image: lykkex/emailsenderbroker
+    container_name: emailsenderbroker
+    environment: 
+      - ServiceBus:NamespaceUrl=xxx.servicebus.windows.net
+      - ServiceBus:PolicyName=
+      - ServiceBus:Key=
+      - ServiceBus:QueueName=
+      - Smtp:Host=localhost
+      - Smtp:Port=25
+      - Smtp:Login=
+      - Smtp:Password=
+      - Smtp:From=
+      - Smtp:DisplayName=
+      - Smtp:LocalDomain=
+    networks:
+      mynet:
+        aliases:
+          - emailsenderbroker
+
+networks:
+  mynet:
+    driver: bridge

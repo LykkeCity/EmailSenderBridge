@@ -1,9 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Net;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using Amqp;
 using EmailSenderBridge.Settings;
 using MailKit.Net.Smtp;
@@ -21,11 +19,13 @@ namespace EmailSenderBridge
         readonly ApplicationSettings _settings;
         private readonly Session _session;
         private readonly Connection _connection;
+        private bool _isRunning;
 
         public Application(ILogger<Application> logger, IOptions<ApplicationSettings> settings)
         {
             _logger = logger;
             _settings = settings.Value;
+            _isRunning = true;
 
             string policyName = WebUtility.UrlEncode(_settings.ServiceBus.PolicyName);
             string key = WebUtility.UrlEncode(_settings.ServiceBus.Key);
@@ -43,22 +43,27 @@ namespace EmailSenderBridge
             }
         }
 
-        public async Task RunAsync()
+        public void Run()
         {
             try
             {
-                if (!IsSettingsValid())
-                {
-                    return;
-                }
-
                 ReceiverLink receiver = new ReceiverLink(_session, "receiver-link", _settings.ServiceBus.QueueName);
                 receiver.Start(5, ReceiveMessage);
 
                 Console.WriteLine("Waiting for the messages...");
-                Console.ReadLine();
-                await _session.CloseAsync();
-                await _connection.CloseAsync();
+                System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += context =>
+                {
+                    Console.WriteLine("Closing connections and shutdown application...");
+                    receiver.Close();
+                    _session.Close();
+                    _connection.Close();
+                    _isRunning = false;
+                };
+
+                while (_isRunning)
+                {
+                    Thread.Sleep(1000);
+                }
             }
             catch (Exception ex)
             {
@@ -128,67 +133,6 @@ namespace EmailSenderBridge
             {
                 _logger.LogError(ex.ToString());
             }
-        }
-
-        private bool IsSettingsValid()
-        {
-            bool isValid = true;
-
-            if (string.IsNullOrEmpty(_settings.ServiceBus.NamespaceUrl))
-            {
-                isValid = false;
-                Console.WriteLine("Provide NamespaceUrl value for ServiceBus in appsettings.json");
-            }
-
-            if (string.IsNullOrEmpty(_settings.ServiceBus.PolicyName))
-            {
-                isValid = false;
-                Console.WriteLine("Provide PolicyName value for ServiceBus in appsettings.json");
-            }
-
-            if (string.IsNullOrEmpty(_settings.ServiceBus.Key))
-            {
-                isValid = false;
-                Console.WriteLine("Provide Key value for ServiceBus in appsettings.json");
-            }
-
-            if (string.IsNullOrEmpty(_settings.ServiceBus.QueueName))
-            {
-                isValid = false;
-                Console.WriteLine("Provide QueueName value for ServiceBus in appsettings.json");
-            }
-
-            if (string.IsNullOrEmpty(_settings.Smtp.Host))
-            {
-                isValid = false;
-                Console.WriteLine("Provide Host value for Smtp in appsettings.json");
-            }
-
-            if (_settings.Smtp.Port == 0)
-            {
-                isValid = false;
-                Console.WriteLine("Provide Post value for Smtp in appsettings.json");
-            }
-
-            if (string.IsNullOrEmpty(_settings.Smtp.Login))
-            {
-                isValid = false;
-                Console.WriteLine("Provide Login value for Smtp in appsettings.json");
-            }
-
-            if (string.IsNullOrEmpty(_settings.Smtp.Password))
-            {
-                isValid = false;
-                Console.WriteLine("Provide Password value for Smtp in appsettings.json");
-            }
-
-            if (string.IsNullOrEmpty(_settings.Smtp.From))
-            {
-                isValid = false;
-                Console.WriteLine("Provide From value for Smtp in appsettings.json");
-            }
-
-            return isValid;
         }
     }
 }

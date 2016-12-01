@@ -1,12 +1,16 @@
 ﻿using System;
 using System.IO;
-using EmailSenderBridge.Settings;
+using AzureStorage.Tables;
+using Common.Log;
+using EmailSenderBridge.Broker.Settings;
+using EmailSenderBridge.Domain.Monitoring;
+using EmailSenderBridge.Repositories;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace EmailSenderBridge
+namespace EmailSenderBridge.Broker
 {
     public class Program
     {
@@ -14,9 +18,7 @@ namespace EmailSenderBridge
         {
             IServiceCollection serviceCollection = new ServiceCollection();
 
-            ConfigureServices(serviceCollection);
-
-            IServiceProvider serviceProvider = serviceCollection.BuildServiceProvider();
+            IServiceProvider serviceProvider = ConfigureServices(serviceCollection);
 
             var settings = serviceProvider.GetService<IOptions<ApplicationSettings>>();
 
@@ -29,7 +31,7 @@ namespace EmailSenderBridge
             app.Run();
         }
 
-        private static void ConfigureServices(IServiceCollection services)
+        private static IServiceProvider ConfigureServices(IServiceCollection services)
         {
             ILoggerFactory loggerFactory = new LoggerFactory()
                 .AddConsole()
@@ -47,7 +49,18 @@ namespace EmailSenderBridge
             services.AddSingleton(configuration);
             services.AddOptions();
             services.Configure<ApplicationSettings>(configuration);
+
+            var connectionStrings = configuration.GetSection("ConnStrings");
+            ILog log = new LogToTableRepository(new AzureTableStorage<LogEntity>(connectionStrings["Logs"], "LogEmailSenderBridge", null));
+            services.AddSingleton(log);
+
+            services.AddSingleton<IServiceMonitoringRepository>(new ServiceMonitoringRepository(
+                    new AzureTableStorage<MonitoringRecordEntity>(connectionStrings["Shared"], "Monitoring", log)));
+
             services.AddTransient<Application>();
+
+            IServiceProvider serviceProvider = services.BuildServiceProvider();
+            return serviceProvider;
         }
 
         private static bool IsSettingsValid(ApplicationSettings settings)
@@ -118,6 +131,18 @@ namespace EmailSenderBridge
             {
                 isValid = false;
                 Console.WriteLine("Provide LocalDomain value for Smtp section in appsettings.json or Smtp:LocalDomain from env variable");
+            }
+
+            if (string.IsNullOrEmpty(settings.ConnStrings.Logs))
+            {
+                isValid = false;
+                Console.WriteLine("Provide Logs value for ConnStrings section in appsettings.json or ConnStrings:Logs from env variable");
+            }
+
+            if (string.IsNullOrEmpty(settings.ConnStrings.Shared))
+            {
+                isValid = false;
+                Console.WriteLine("Provide Shared value for ConnStrings section in appsettings.json or ConnStrings:Shared from env variable");
             }
 
             return isValid;

@@ -30,7 +30,9 @@
     "Microsoft.Extensions.PlatformAbstractions": "1.1.0",
     "System.Net.Http": "4.3.0",
     "System.Runtime.Serialization.Xml": "4.3.0",
-    "System.Xml.XmlDocument": "4.3.0"
+    "System.Xml.XmlDocument": "4.3.0",
+    "Lykke.Common": "1.1.1",
+    "EmailSenderBridge.Repositories": "1.0.0-*"
   },
   "frameworks": {
     "netcoreapp1.1": {
@@ -40,7 +42,10 @@
           "version": "1.1.0"
         }
       },
-      "imports": "dnxcore50"
+      "imports": [
+        "dnxcore50",
+        "portable-net451+win8"
+      ]
     }
   },
   "version": "1.0.0-*",

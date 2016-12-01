@@ -1,4 +1,4 @@
-namespace EmailSenderBridge.Settings
+namespace EmailSenderBridge.Broker.Settings
 {
     public class ServiceBusSettings
     {

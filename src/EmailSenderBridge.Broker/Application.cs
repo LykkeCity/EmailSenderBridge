@@ -2,8 +2,12 @@
 using System.IO;
 using System.Net;
 using System.Threading;
+using System.Threading.Tasks;
 using Amqp;
-using EmailSenderBridge.Settings;
+using Common;
+using Common.Log;
+using EmailSenderBridge.Broker.Settings;
+using EmailSenderBridge.Domain.Monitoring;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Logging;
@@ -11,19 +15,28 @@ using Microsoft.Extensions.Options;
 using MimeKit;
 using MimeKit.Text;
 
-namespace EmailSenderBridge
+namespace EmailSenderBridge.Broker
 {
-    public class Application
+    public class Application : TimerPeriod
     {
+        private readonly IServiceMonitoringRepository _serviceMonitoringRepository;
         readonly ILogger _logger;
+        private readonly ILog _log;
         readonly ApplicationSettings _settings;
         private readonly Session _session;
         private readonly Connection _connection;
         private bool _isRunning;
 
-        public Application(ILogger<Application> logger, IOptions<ApplicationSettings> settings)
+        public Application(
+            IServiceMonitoringRepository serviceMonitoringRepository,
+            ILogger<Application> logger, 
+            ILog log, 
+            IOptions<ApplicationSettings> settings) 
+            : base("EmailSenderBridge", 30000, log)
         {
+            _serviceMonitoringRepository = serviceMonitoringRepository;
             _logger = logger;
+            _log = log;
             _settings = settings.Value;
             _isRunning = true;
 
@@ -38,6 +51,7 @@ namespace EmailSenderBridge
             }
             catch (Exception ex)
             {
+                _log.WriteErrorAsync("EmailSernderBridge", "Application()", null, ex).Wait();
                 _logger.LogWarning("Check ServiceBus settings in appsettings.json");
                 _logger.LogError(ex.ToString());
             }
@@ -51,13 +65,17 @@ namespace EmailSenderBridge
                 receiver.Start(5, ReceiveMessage);
 
                 Console.WriteLine("Waiting for the messages...");
+                _log.WriteInfoAsync("EmailSenderBridge", "Run()", null, "Application started. Waiting for the messages...").Wait();
+                Start();
                 System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += context =>
                 {
                     Console.WriteLine("Closing connections and shutdown application...");
+                    _log.WriteInfoAsync("EmailSenderBridge", "Run()", null, "Closing connections and shutdown application...").Wait();
                     receiver.Close();
                     _session.Close();
                     _connection.Close();
                     _isRunning = false;
+                    Stop();
                 };
 
                 while (_isRunning)
@@ -67,6 +85,7 @@ namespace EmailSenderBridge
             }
             catch (Exception ex)
             {
+                _log.WriteErrorAsync("EmailSernderBridge", "Run()", null, ex).Wait();
                 _logger.LogError(ex.ToString());
             }
         }
@@ -131,8 +150,21 @@ namespace EmailSenderBridge
             }
             catch (Exception ex)
             {
+                _log.WriteErrorAsync("EmailSernderBridge", "ReceiveMessage()", null, ex).Wait();
                 _logger.LogError(ex.ToString());
             }
+        }
+
+        public override async Task Execute()
+        {
+            var record = new MonitoringRecord
+            {
+                DateTime = DateTime.UtcNow,
+                ServiceName = MOnitoringServiceNames.EmailSenderBridge,
+                Version = Microsoft.Extensions.PlatformAbstractions.PlatformServices.Default.Application.ApplicationVersion
+            };
+
+            await _serviceMonitoringRepository.UpdateOrCreate(record);
         }
     }
 }

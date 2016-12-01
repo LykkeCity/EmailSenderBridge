@@ -3,7 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "EmailSenderBridge", "EmailSenderBridge.xproj", "{24E4FDC5-DB1E-4F15-A512-046CB6D0390D}"
+Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "EmailSenderBridge.Broker", "src\EmailSenderBridge.Broker\EmailSenderBridge.Broker.xproj", "{24E4FDC5-DB1E-4F15-A512-046CB6D0390D}"
+EndProject
+Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "EmailSenderBridge.Repositories", "src\EmailSenderBridge.Repositories\EmailSenderBridge.Repositories.xproj", "{1B89650B-FDCA-4967-B045-3D817F26CE0E}"
+EndProject
+Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "EmailSenderBridge.Domain", "src\EmailSenderBridge.Domain\EmailSenderBridge.Domain.xproj", "{4DC0AEBF-EFA2-4EB9-8768-DCDA3DCCEF30}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +19,14 @@ Global
 		{24E4FDC5-DB1E-4F15-A512-046CB6D0390D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{24E4FDC5-DB1E-4F15-A512-046CB6D0390D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{24E4FDC5-DB1E-4F15-A512-046CB6D0390D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1B89650B-FDCA-4967-B045-3D817F26CE0E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1B89650B-FDCA-4967-B045-3D817F26CE0E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1B89650B-FDCA-4967-B045-3D817F26CE0E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1B89650B-FDCA-4967-B045-3D817F26CE0E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4DC0AEBF-EFA2-4EB9-8768-DCDA3DCCEF30}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4DC0AEBF-EFA2-4EB9-8768-DCDA3DCCEF30}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4DC0AEBF-EFA2-4EB9-8768-DCDA3DCCEF30}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4DC0AEBF-EFA2-4EB9-8768-DCDA3DCCEF30}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

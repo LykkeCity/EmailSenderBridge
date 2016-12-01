@@ -15,6 +15,8 @@ services:
       - Smtp:From=
       - Smtp:DisplayName=
       - Smtp:LocalDomain=
+      - ConnStrings:Logs=
+      - ConnStrings:Shared=
     networks:
       mynet:
         aliases:

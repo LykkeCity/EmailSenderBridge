@@ -1,0 +1,23 @@
+﻿{
+  "version": "1.0.0-*",
+
+  "dependencies": {
+    "EmailSenderBridge.Domain": "1.0.0-*",
+    "Lykke.AzureStorage": "1.2.0"
+  },
+
+  "frameworks": {
+    "netcoreapp1.1": {
+      "dependencies": {
+        "Microsoft.NETCore.App": {
+          "type": "platform",
+          "version": "1.1.0"
+        }
+      },
+      "imports": [
+        "dnxcore50",
+        "portable-net451+win8"
+      ]
+    }
+  }
+}

@@ -6,7 +6,7 @@ namespace EmailSenderBridge.Domain.Monitoring
 {
     public static class MOnitoringServiceNames
     {
-        public const string EmailSenderBridge = "EmailSenderBridge";
+        public const string EmailSenderBridge = "EmailSenderBridge.Broker";
     }
 
     public interface IMonitoringRecord

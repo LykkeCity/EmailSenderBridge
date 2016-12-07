@@ -52,8 +52,8 @@ namespace EmailSenderBridge.Broker
             catch (Exception ex)
             {
                 _log.WriteErrorAsync("EmailSernderBridge", "Application()", null, ex).Wait();
-                _logger.LogWarning("Check ServiceBus settings in appsettings.json");
-                _logger.LogError(ex.ToString());
+                _logger.LogWarning($"[{DateTime.UtcNow:u}] Check ServiceBus settings in appsettings.json");
+                _logger.LogError($"[{DateTime.UtcNow:u}] {ex}");
             }
         }
 
@@ -64,12 +64,12 @@ namespace EmailSenderBridge.Broker
                 ReceiverLink receiver = new ReceiverLink(_session, "receiver-link", _settings.ServiceBus.QueueName);
                 receiver.Start(5, ReceiveMessage);
 
-                Console.WriteLine("Waiting for the messages...");
+                _logger.LogInformation($"[{DateTime.UtcNow:u}] Waiting for the messages...");
                 _log.WriteInfoAsync("EmailSenderBridge", "Run()", null, "Application started. Waiting for the messages...").Wait();
                 Start();
                 System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += context =>
                 {
-                    Console.WriteLine("Closing connections and shutdown application...");
+                    _logger.LogInformation($"[{DateTime.UtcNow:u}] Closing connections and shutdown application...");
                     _log.WriteInfoAsync("EmailSenderBridge", "Run()", null, "Closing connections and shutdown application...").Wait();
                     receiver.Close();
                     _session.Close();
@@ -86,7 +86,7 @@ namespace EmailSenderBridge.Broker
             catch (Exception ex)
             {
                 _log.WriteErrorAsync("EmailSernderBridge", "Run()", null, ex).Wait();
-                _logger.LogError(ex.ToString());
+                _logger.LogError($"[{DateTime.UtcNow:u}] {ex}");
             }
         }
 
@@ -94,7 +94,7 @@ namespace EmailSenderBridge.Broker
         {
             try
             {
-                _logger.LogInformation("Processing message...");
+                _logger.LogInformation($"[{DateTime.UtcNow:u}] Processing message...");
                 string email = message.ApplicationProperties["email"].ToString();
                 string sender = message.ApplicationProperties["sender"].ToString();
                 bool isHtml = Convert.ToBoolean(message.ApplicationProperties["isHtml"]);
@@ -138,7 +138,9 @@ namespace EmailSenderBridge.Broker
 
                 using (var client = new SmtpClient())
                 {
-                    _logger.LogInformation($"Sending email to {email} from {(string.IsNullOrEmpty(sender) ? _settings.Smtp.From : sender)} with subject '{subject}'");
+                    string logMessage = $"[{DateTime.UtcNow:u}] Sending email to {email} from {(string.IsNullOrEmpty(sender) ? _settings.Smtp.From : sender)} with subject '{subject}'";
+                    _logger.LogInformation(logMessage);
+                    _log.WriteInfoAsync("EmailSenderBridge", "ReceiveMessage()", null, logMessage).Wait();
                     client.LocalDomain = _settings.Smtp.LocalDomain;
                     client.Connect(_settings.Smtp.Host, _settings.Smtp.Port, SecureSocketOptions.None);
                     client.Authenticate(_settings.Smtp.Login, _settings.Smtp.Password);
@@ -150,8 +152,9 @@ namespace EmailSenderBridge.Broker
             }
             catch (Exception ex)
             {
+                receiver.Reject(message);
                 _log.WriteErrorAsync("EmailSernderBridge", "ReceiveMessage()", null, ex).Wait();
-                _logger.LogError(ex.ToString());
+                _logger.LogError($"[{DateTime.UtcNow:u}] {ex}");
             }
         }
 

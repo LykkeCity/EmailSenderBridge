@@ -171,9 +171,13 @@ namespace EmailSenderBridge.Broker
 
         public override async Task Execute()
         {
+            var now = DateTime.UtcNow;
+
+            _logger.LogInformation($"[{now:u}] Ping! Writing to monitoring...");
+
             var record = new MonitoringRecord
             {
-                DateTime = DateTime.UtcNow,
+                DateTime = now,
                 ServiceName = MOnitoringServiceNames.EmailSenderBridge,
                 Version = Microsoft.Extensions.PlatformAbstractions.PlatformServices.Default.Application.ApplicationVersion
             };

@@ -4,6 +4,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Amqp;
+using Amqp.Framing;
 using Common;
 using Common.Log;
 using EmailSenderBridge.Broker.Settings;
@@ -62,7 +63,10 @@ namespace EmailSenderBridge.Broker
             try
             {
                 ReceiverLink receiver = new ReceiverLink(_session, "receiver-link", _settings.ServiceBus.QueueName);
-                receiver.Start(5, ReceiveMessage);
+                _connection.Closed += OnChannelClosed;
+                _session.Closed += OnChannelClosed;
+                receiver.Closed += OnChannelClosed;
+                receiver.Start(100, ReceiveMessage);
 
                 _logger.LogInformation($"[{DateTime.UtcNow:u}] Waiting for the messages...");
                 _log.WriteInfoAsync("EmailSenderBridge", "Run()", null, "Application started. Waiting for the messages...").Wait();
@@ -88,6 +92,13 @@ namespace EmailSenderBridge.Broker
                 _log.WriteErrorAsync("EmailSernderBridge", "Run()", null, ex).Wait();
                 _logger.LogError($"[{DateTime.UtcNow:u}] {ex}");
             }
+        }
+
+        private void OnChannelClosed(AmqpObject sender, Error error)
+        {
+            string message = $"OnChannelClosed fired: IsClosed = {sender.IsClosed}, Error description = {sender.Error.Description}";
+            _logger.LogInformation(message);
+            _log.WriteInfoAsync("EmailSenderBridge", "OnChannelClosed()", null, message).Wait();
         }
 
         private void ReceiveMessage(ReceiverLink receiver, Message message)

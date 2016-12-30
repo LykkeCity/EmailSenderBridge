@@ -28,6 +28,12 @@ namespace EmailSenderBridge.Broker
             }
 
             Application app = serviceProvider.GetService<Application>();
+
+            System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += context =>
+            {
+                app.Shutdown();
+            };
+
             app.Run();
         }
 

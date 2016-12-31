@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using Amqp;
@@ -73,83 +74,44 @@ namespace EmailSenderBridge.Broker
 
         private void HandleMessages()
         {
-            _connection = Connection.Factory.CreateAsync(new Address(_connectionString)).GetAwaiter().GetResult();
-            _session = new Session(_connection);
-            _receiver = new ReceiverLink(_session, "receiver-link", _settings.ServiceBus.QueueName);
-
-            while (_isRunning)
+            try
             {
-                Message message = _receiver.Receive();
+                _logger.LogInformation($"[{DateTime.UtcNow:u}] Connecting to the ServiceBus...");
+                _log.WriteInfoAsync("EmailSenderBridge", "HandleMessages()", null, "Connecting to the ServiceBus...").Wait();
+                _connection = Connection.Factory.CreateAsync(new Address(_connectionString)).GetAwaiter().GetResult();
+                _session = new Session(_connection);
+                _receiver = new ReceiverLink(_session, "receiver-link", _settings.ServiceBus.QueueName);
 
-                if (message == null)
+                while (_isRunning)
                 {
-                    continue;
-                }
+                    Message message = _receiver.Receive();
 
-                try
-                {
-                    _logger.LogInformation($"[{DateTime.UtcNow:u}] Processing message...");
-                    string email = message.ApplicationProperties["email"].ToString();
-                    string sender = message.ApplicationProperties["sender"].ToString();
-                    bool isHtml = Convert.ToBoolean(message.ApplicationProperties["isHtml"]);
-                    string subject = message.ApplicationProperties["subject"].ToString();
-                    bool hasAttachment = Convert.ToBoolean(message.ApplicationProperties["hasAttachment"]);
-
-                    string body = message.GetBody<string>();
-
-                    var emailMessage = new MimeMessage();
-
-                    emailMessage.From.Add(!string.IsNullOrEmpty(sender)
-                        ? new MailboxAddress(string.Empty, sender)
-                        : new MailboxAddress(_settings.Smtp.DisplayName, _settings.Smtp.From));
-
-                    emailMessage.To.Add(new MailboxAddress(string.Empty, email));
-                    emailMessage.Subject = subject;
-
-                    var messageBody = new TextPart(isHtml ? TextFormat.Html : TextFormat.Plain) { Text = body };
-
-
-                    if (hasAttachment)
+                    if (message == null)
                     {
-                        string contentType = message.ApplicationProperties["contentType"].ToString();
-                        string filename = message.ApplicationProperties["fileName"].ToString();
-                        byte[] file = (byte[])message.ApplicationProperties["file"];
-
-                        var attachmentData = new MemoryStream(file);
-                        var attachment = new MimePart(contentType)
-                        {
-                            ContentObject = new ContentObject(attachmentData),
-                            FileName = filename
-                        };
-
-                        Multipart multipart = new Multipart("mixed") { messageBody, attachment };
-                        emailMessage.Body = multipart;
-                    }
-                    else
-                    {
-                        emailMessage.Body = messageBody;
+                        continue;
                     }
 
-                    using (var client = new SmtpClient())
+                    try
                     {
-                        string logMessage = $"[{DateTime.UtcNow:u}] Sending email to {email} from {(string.IsNullOrEmpty(sender) ? _settings.Smtp.From : sender)} with subject '{subject}'";
-                        _logger.LogInformation(logMessage);
-                        _log.WriteInfoAsync("EmailSenderBridge", "ReceiveMessage()", null, logMessage).Wait();
-                        client.LocalDomain = _settings.Smtp.LocalDomain;
-                        client.Connect(_settings.Smtp.Host, _settings.Smtp.Port, SecureSocketOptions.None);
-                        client.Authenticate(_settings.Smtp.Login, _settings.Smtp.Password);
-                        client.Send(emailMessage);
-                        client.Disconnect(true);
-                    }
+                        _logger.LogInformation($"[{DateTime.UtcNow:u}] Processing message...");
 
-                    _receiver.Accept(message);
+                        MimeMessage emailMessage = PrepareEmailMessage(message);
+                        SendEmailMessage(emailMessage);
+                        
+                        _receiver.Accept(message);
+                    }
+                    catch (Exception ex)
+                    {
+                        _receiver.Reject(message);
+                        _log.WriteErrorAsync("EmailSernderBridge", "HandleMessages()", null, ex).Wait();
+                        _logger.LogError($"[{DateTime.UtcNow:u}] {ex}");
+                    }
                 }
-                catch (Exception ex)
-                {
-                    _receiver.Reject(message);
-                    _log.WriteErrorAsync("EmailSernderBridge", "HandleMessages()", null, ex).Wait();
-                    _logger.LogError($"[{DateTime.UtcNow:u}] {ex}");
-                }
+            }
+            catch (Exception ex)
+            {
+                _log.WriteErrorAsync("EmailSernderBridge", "HandleMessages()", "Connection issue", ex).Wait();
+                _logger.LogError($"[{DateTime.UtcNow:u}] {ex}");
             }
         }
 
@@ -165,6 +127,70 @@ namespace EmailSenderBridge.Broker
             };
 
             await _serviceMonitoringRepository.UpdateOrCreate(record);
+        }
+
+        private MimeMessage PrepareEmailMessage(Message message)
+        {
+            var emailMessage = new MimeMessage();
+
+            string email = message.ApplicationProperties["email"].ToString();
+            string sender = message.ApplicationProperties["sender"].ToString();
+            bool isHtml = Convert.ToBoolean(message.ApplicationProperties["isHtml"]);
+            string subject = message.ApplicationProperties["subject"].ToString();
+            bool hasAttachment = Convert.ToBoolean(message.ApplicationProperties["hasAttachment"]);
+
+            string body = message.GetBody<string>();
+
+            emailMessage.From.Add(!string.IsNullOrEmpty(sender)
+                ? new MailboxAddress(string.Empty, sender)
+                : new MailboxAddress(_settings.Smtp.DisplayName, _settings.Smtp.From));
+
+            emailMessage.To.Add(new MailboxAddress(string.Empty, email));
+            emailMessage.Subject = subject;
+
+            var messageBody = new TextPart(isHtml ? TextFormat.Html : TextFormat.Plain) { Text = body };
+
+
+            if (hasAttachment)
+            {
+                string contentType = message.ApplicationProperties["contentType"].ToString();
+                string filename = message.ApplicationProperties["fileName"].ToString();
+                byte[] file = (byte[])message.ApplicationProperties["file"];
+
+                var attachmentData = new MemoryStream(file);
+                var attachment = new MimePart(contentType)
+                {
+                    ContentObject = new ContentObject(attachmentData),
+                    FileName = filename
+                };
+
+                Multipart multipart = new Multipart("mixed") { messageBody, attachment };
+                emailMessage.Body = multipart;
+            }
+            else
+            {
+                emailMessage.Body = messageBody;
+            }
+
+            return emailMessage;
+        }
+
+        private void SendEmailMessage(MimeMessage emailMessage)
+        {
+            using (var client = new SmtpClient())
+            {
+                string emails = string.Join(",", emailMessage.To.Mailboxes.Select(item => item.Address));
+                string from = emailMessage.From.Mailboxes.FirstOrDefault()?.Address ?? _settings.Smtp.From;
+
+                string logMessage = $"[{DateTime.UtcNow:u}] Sending email to {emails} from {from} with subject '{emailMessage.Subject}'";
+                _logger.LogInformation(logMessage);
+                _log.WriteInfoAsync("EmailSenderBridge", "ReceiveMessage()", null, logMessage).Wait();
+                client.LocalDomain = _settings.Smtp.LocalDomain;
+                client.Connect(_settings.Smtp.Host, _settings.Smtp.Port, SecureSocketOptions.None);
+                client.Authenticate(_settings.Smtp.Login, _settings.Smtp.Password);
+                client.Send(emailMessage);
+                client.Disconnect(true);
+            }
         }
     }
 }

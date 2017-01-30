@@ -49,6 +49,7 @@ namespace EmailSenderBridge.Broker
             IConfigurationRoot configuration = new ConfigurationBuilder()
                     .SetBasePath(Directory.GetCurrentDirectory())
                     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                    .AddJsonFile($"appsettings.dev.json", optional: true, reloadOnChange: false)
                     .AddEnvironmentVariables()
                     .Build();
 

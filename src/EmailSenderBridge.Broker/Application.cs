@@ -138,6 +138,7 @@ namespace EmailSenderBridge.Broker
             bool isHtml = Convert.ToBoolean(message.ApplicationProperties["isHtml"]);
             string subject = message.ApplicationProperties["subject"].ToString();
             bool hasAttachment = Convert.ToBoolean(message.ApplicationProperties["hasAttachment"]);
+            int attachmentsCount = Convert.ToInt32(message.ApplicationProperties["attachmentsCount"]);
 
             string body = message.GetBody<string>();
 
@@ -150,21 +151,26 @@ namespace EmailSenderBridge.Broker
 
             var messageBody = new TextPart(isHtml ? TextFormat.Html : TextFormat.Plain) { Text = body };
 
+            Multipart multipart = new Multipart("mixed") {messageBody};
 
             if (hasAttachment)
             {
-                string contentType = message.ApplicationProperties["contentType"].ToString();
-                string filename = message.ApplicationProperties["fileName"].ToString();
-                byte[] file = (byte[])message.ApplicationProperties["file"];
-
-                var attachmentData = new MemoryStream(file);
-                var attachment = new MimePart(contentType)
+                for (var i = 0; i < attachmentsCount; i++)
                 {
-                    ContentObject = new ContentObject(attachmentData),
-                    FileName = filename
-                };
+                    string contentType = message.ApplicationProperties[$"contentType_{i}"].ToString();
+                    string filename = message.ApplicationProperties[$"fileName_{i}"].ToString();
+                    byte[] file = (byte[])message.ApplicationProperties[$"file_{i}"];
 
-                Multipart multipart = new Multipart("mixed") { messageBody, attachment };
+                    var attachmentData = new MemoryStream(file);
+                    var attachment = new MimePart(contentType)
+                    {
+                        ContentObject = new ContentObject(attachmentData),
+                        FileName = filename
+                    };
+
+                    multipart.Add(attachment);
+                }
+                
                 emailMessage.Body = multipart;
             }
             else

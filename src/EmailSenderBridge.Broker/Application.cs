@@ -155,11 +155,13 @@ namespace EmailSenderBridge.Broker
 
             if (hasAttachment)
             {
-                for (var i = 0; i < attachmentsCount; i++)
+                //if hasAttachments, but attachmentsCount = 0, message is send from old producer
+                //TODO: remove when new producers and consumers will be used
+                if (attachmentsCount == 0)
                 {
-                    string contentType = message.ApplicationProperties[$"contentType_{i}"].ToString();
-                    string filename = message.ApplicationProperties[$"fileName_{i}"].ToString();
-                    byte[] file = (byte[])message.ApplicationProperties[$"file_{i}"];
+                    string contentType = message.ApplicationProperties["contentType"].ToString();
+                    string filename = message.ApplicationProperties["fileName"].ToString();
+                    byte[] file = (byte[]) message.ApplicationProperties["file"];
 
                     var attachmentData = new MemoryStream(file);
                     var attachment = new MimePart(contentType)
@@ -169,6 +171,24 @@ namespace EmailSenderBridge.Broker
                     };
 
                     multipart.Add(attachment);
+                }
+                else
+                {
+                    for (var i = 0; i < attachmentsCount; i++)
+                    {
+                        string contentType = message.ApplicationProperties[$"contentType_{i}"].ToString();
+                        string filename = message.ApplicationProperties[$"fileName_{i}"].ToString();
+                        byte[] file = (byte[])message.ApplicationProperties[$"file_{i}"];
+
+                        var attachmentData = new MemoryStream(file);
+                        var attachment = new MimePart(contentType)
+                        {
+                            ContentObject = new ContentObject(attachmentData),
+                            FileName = filename
+                        };
+
+                        multipart.Add(attachment);
+                    }
                 }
                 
                 emailMessage.Body = multipart;
